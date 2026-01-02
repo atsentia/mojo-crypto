@@ -76,7 +76,7 @@ mojo run tests/test_crypto.mojo
 
 ## License
 
-MIT
+Apache 2.0
 
 ## Part of mojo-contrib
 
