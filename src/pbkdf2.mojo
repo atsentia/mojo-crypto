@@ -9,6 +9,17 @@ from .hmac import hmac_sha256, hmac_sha512
 
 
 # =============================================================================
+# Security Constants
+# =============================================================================
+
+alias MIN_ITERATIONS: Int = 10000
+"""Minimum iterations for password hashing (OWASP recommendation)."""
+
+alias MIN_SALT_LENGTH: Int = 16
+"""Minimum salt length in bytes (128 bits, NIST SP 800-132)."""
+
+
+# =============================================================================
 # PBKDF2-HMAC-SHA256
 # =============================================================================
 
@@ -210,17 +221,48 @@ fn pbkdf2_sha512_hex(
 # Password Hashing Helpers
 # =============================================================================
 
-fn hash_password(password: String, salt: List[UInt8], iterations: Int = 100000) -> List[UInt8]:
+fn hash_password(password: String, salt: List[UInt8], iterations: Int = 100000) raises -> List[UInt8]:
     """
     Hash a password for storage.
 
     Uses PBKDF2-HMAC-SHA256 with the provided salt.
     Default 100,000 iterations per OWASP recommendations.
 
+    SECURITY: This function enforces minimum security parameters:
+    - Minimum 10,000 iterations (OWASP recommendation)
+    - Minimum 16-byte salt (NIST SP 800-132)
+
+    Args:
+        password: The password to hash.
+        salt: Salt bytes (must be at least 16 bytes).
+        iterations: Number of iterations (minimum 10,000).
+
+    Returns:
+        32-byte derived key.
+
+    Raises:
+        Error if iterations < 10,000 or salt < 16 bytes.
+
     Example:
         var salt = generate_random_bytes(16)
         var hash = hash_password("my_password", salt)
     """
+    # SECURITY: Enforce minimum iterations
+    if iterations < MIN_ITERATIONS:
+        raise Error(
+            "SECURITY: iterations must be >= " + String(MIN_ITERATIONS) +
+            " (got " + String(iterations) + "). " +
+            "Low iteration counts make passwords vulnerable to brute-force attacks."
+        )
+
+    # SECURITY: Enforce minimum salt length
+    if len(salt) < MIN_SALT_LENGTH:
+        raise Error(
+            "SECURITY: salt must be >= " + String(MIN_SALT_LENGTH) + " bytes " +
+            "(got " + String(len(salt)) + "). " +
+            "Short salts reduce protection against rainbow table attacks."
+        )
+
     return pbkdf2_sha256(
         _string_to_bytes_pbkdf2(password),
         salt,
@@ -234,16 +276,23 @@ fn verify_password(
     salt: List[UInt8],
     expected_hash: List[UInt8],
     iterations: Int = 100000,
-) -> Bool:
+) raises -> Bool:
     """
     Verify a password against a stored hash.
 
     Uses constant-time comparison to prevent timing attacks.
 
+    SECURITY: This function enforces minimum security parameters:
+    - Minimum 10,000 iterations (OWASP recommendation)
+    - Minimum 16-byte salt (NIST SP 800-132)
+
     Security Note:
         This function avoids early returns that could leak timing information.
         The length difference is XORed into the result rather than causing
         an early return.
+
+    Raises:
+        Error if iterations < 10,000 or salt < 16 bytes.
     """
     var computed = hash_password(password, salt, iterations)
 
@@ -258,6 +307,33 @@ fn verify_password(
         result |= computed[i] ^ expected_hash[i]
 
     return result == 0
+
+
+# =============================================================================
+# Unsafe Functions (for testing only)
+# =============================================================================
+
+fn hash_password_UNSAFE_NO_VALIDATION(
+    password: String,
+    salt: List[UInt8],
+    iterations: Int,
+) -> List[UInt8]:
+    """
+    Hash a password WITHOUT security validation.
+
+    WARNING: This function does NOT enforce minimum iterations or salt length.
+    It exists ONLY for:
+    - Testing RFC 6070 test vectors (which use low iterations)
+    - Compatibility with legacy systems
+
+    DO NOT use this in production. Use `hash_password()` instead.
+    """
+    return pbkdf2_sha256(
+        _string_to_bytes_pbkdf2(password),
+        salt,
+        iterations,
+        32,
+    )
 
 
 # =============================================================================
