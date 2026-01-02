@@ -1,0 +1,14 @@
+[project]
+name = "mojo-crypto"
+version = "0.1.0"
+description = "Pure Mojo cryptographic primitives (SHA-256/512, HMAC, PBKDF2)"
+authors = ["IDEA2CODE"]
+channels = ["conda-forge", "modular"]
+platforms = ["osx-arm64", "linux-64"]
+
+[tasks]
+build = "mojo build src -o lib/mojo_crypto.mojopkg"
+test = "mojo run tests/test_crypto.mojo"
+
+[dependencies]
+max = ">=24.6,<25"
